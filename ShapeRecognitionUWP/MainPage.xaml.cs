@@ -39,11 +39,12 @@ namespace ShapeRecognitionUWP
         {
             this.InitializeComponent();
 
+            inkAnalyzer = new InkAnalyzer();
             inkCanvas.InkPresenter.InputDeviceTypes = CoreInputDeviceTypes.Mouse | CoreInputDeviceTypes.Pen | CoreInputDeviceTypes.Touch;
             inkCanvas.InkPresenter.StrokesCollected += InkPresenter_StrokesCollected;
             inkCanvas.InkPresenter.StrokeInput.StrokeStarted += StrokeInput_StrokeStarted;
 
-            inkAnalyzer = new InkAnalyzer();
+            // this timer will allow us to recognize multi-stroke shapes
             strokeTimer = new DispatcherTimer();
             strokeTimer.Interval = TimeSpan.FromMilliseconds(500d);
             strokeTimer.Tick += StrokeTimer_Tick;
@@ -59,6 +60,7 @@ namespace ShapeRecognitionUWP
             strokeTimer.Stop();
             if (!inkAnalyzer.IsAnalyzing)
             {
+                // let's analyze the collected ink strokes
                 Analyze();
             }
             else
@@ -74,6 +76,10 @@ namespace ShapeRecognitionUWP
             inkAnalyzer.AddDataForStrokes(args.Strokes);
             foreach (InkStroke stroke in args.Strokes)
             {
+                // since this is a drawing application, we can tell InkAnalyzer about
+                // the nature of the stroke - it's optional but will improve the shape
+                // recognition result for small drawings that may get confused with 
+                // handwritten letters
                 inkAnalyzer.SetStrokeDataKind(stroke.Id, InkAnalysisStrokeKind.Drawing);
             }
             strokeTimer.Start();
@@ -92,6 +98,7 @@ namespace ShapeRecognitionUWP
                     if (drawing.DrawingKind == InkAnalysisDrawingKind.Circle ||
                         drawing.DrawingKind == InkAnalysisDrawingKind.Ellipse)
                     {
+                        // we have detected a circle or ellipse
                         CompositeTransform transform = new CompositeTransform();
                         Ellipse ellipse = new Ellipse();
                         AttachDragHandlers(ellipse);
@@ -125,6 +132,7 @@ namespace ShapeRecognitionUWP
                     }
                     else
                     {
+                        // we have detected a polygon
                         Polygon polygon = new Polygon();
                         AttachDragHandlers(polygon);
                         polygon.Fill = newRandomBrush;
@@ -146,6 +154,7 @@ namespace ShapeRecognitionUWP
                 }
                 else
                 {
+                    // neither ellipse or polygon
                     System.Diagnostics.Debug.WriteLine(inkAnalyzer.AnalysisRoot.Children.Last().Kind.ToString());
                 }
             }
@@ -153,85 +162,9 @@ namespace ShapeRecognitionUWP
             inkAnalyzer.ClearDataForAllStrokes();
         }
 
-        private void AppBarToggleButton_Checked(object sender, RoutedEventArgs e)
-        {
-            inkCanvas.InkPresenter.IsInputEnabled = false;
-            inkCanvas.SetValue(Canvas.ZIndexProperty, -1);
-        }
-
-        private void AppBarToggleButton_Unchecked(object sender, RoutedEventArgs e)
-        {
-            inkCanvas.InkPresenter.IsInputEnabled = true;
-            inkCanvas.SetValue(Canvas.ZIndexProperty, 1);
-        }
-
-        private void AppBarButton_Click(object sender, RoutedEventArgs e)
-        {
-            root.Children.Clear();
-            inkCanvas.InkPresenter.StrokeContainer.Clear();
-            inkAnalyzer.ClearDataForAllStrokes();
-            strokeTimer.Stop();
-        }
-
-        private void shape_PointerPressed(object sender, PointerRoutedEventArgs e)
-        {
-            movingShape = sender as Shape;
-            if (movingShape != null)
-            {
-                movingShape.CapturePointer(e.Pointer);
-                PointerPoint currentPoint = e.GetCurrentPoint(root);
-                offset = new Point((double)movingShape.GetValue(Canvas.LeftProperty) - currentPoint.Position.X, (double)movingShape.GetValue(Canvas.TopProperty) - currentPoint.Position.Y);
-            }
-        }
-
-        private void shape_PointerMoved(object sender, PointerRoutedEventArgs e)
-        {
-            if (movingShape != null)
-            {
-                PointerPoint currentPoint = e.GetCurrentPoint(root);
-                movingShape.SetValue(Canvas.LeftProperty, offset.X + currentPoint.Position.X);
-                movingShape.SetValue(Canvas.TopProperty, offset.Y + currentPoint.Position.Y);
-            }
-        }
-
-        private void shape_PointerReleased(object sender, PointerRoutedEventArgs e)
-        {
-            movingShape = null;
-        }
-
-        private LinearGradientBrush GetRandomGradientBrush()
-        {
-            byte[] bytes1 = new byte[3];
-            rnd.NextBytes(bytes1);
-            byte[] bytes2 = new byte[3];
-            rnd.NextBytes(bytes2);
-            GradientStopCollection gradientStops = new GradientStopCollection();
-            gradientStops.Add(new GradientStop() { Color = Color.FromArgb(128, bytes1[0], bytes1[1], bytes1[2]), Offset = 0 });
-            gradientStops.Add(new GradientStop() { Color = Color.FromArgb(192, bytes2[0], bytes2[1], bytes2[2]), Offset = 1 });
-            return new LinearGradientBrush(gradientStops, rnd.Next() * 360);
-        }
-
-        private void AttachDragHandlers(Shape shape)
-        {
-            shape.PointerPressed += shape_PointerPressed;
-            shape.PointerMoved += shape_PointerMoved;
-            shape.PointerReleased += shape_PointerReleased;
-        }
-
-        private void animationToggle_Checked(object sender, RoutedEventArgs e)
-        {
-            foreach (UIElement element in root.Children)
-            {
-                Shape shape = element as Shape;
-                if (shape != null)
-                {
-                    AddAnimation(shape);
-                }
-            }
-        }
-
         private void AddAnimation(Shape shape)
         {
+            // apply an animation to the shape element
             Storyboard storyboard = shape.Tag as Storyboard;
             if (storyboard != null)
             {
@@ -262,8 +195,94 @@ namespace ShapeRecognitionUWP
             }
         }
 
+        private void AppBarToggleButton_Checked(object sender, RoutedEventArgs e)
+        {
+            // turn off inking to make the shapes dragable
+            inkCanvas.InkPresenter.IsInputEnabled = false;
+            inkCanvas.SetValue(Canvas.ZIndexProperty, -1);
+        }
+
+        private void AppBarToggleButton_Unchecked(object sender, RoutedEventArgs e)
+        {
+            // turn inking back on
+            inkCanvas.InkPresenter.IsInputEnabled = true;
+            inkCanvas.SetValue(Canvas.ZIndexProperty, 1);
+        }
+
+        private void AppBarButton_Click(object sender, RoutedEventArgs e)
+        {
+            // clear all content
+            root.Children.Clear();
+            inkCanvas.InkPresenter.StrokeContainer.Clear();
+            inkAnalyzer.ClearDataForAllStrokes();
+            strokeTimer.Stop();
+        }
+
+        private void shape_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            // grab the shape where the pointer went down
+            movingShape = sender as Shape;
+            if (movingShape != null)
+            {
+                movingShape.CapturePointer(e.Pointer);
+                PointerPoint currentPoint = e.GetCurrentPoint(root);
+                offset = new Point((double)movingShape.GetValue(Canvas.LeftProperty) - currentPoint.Position.X, (double)movingShape.GetValue(Canvas.TopProperty) - currentPoint.Position.Y);
+            }
+        }
+
+        private void shape_PointerMoved(object sender, PointerRoutedEventArgs e)
+        {
+            // move the shape with the pointer
+            if (movingShape != null)
+            {
+                PointerPoint currentPoint = e.GetCurrentPoint(root);
+                movingShape.SetValue(Canvas.LeftProperty, offset.X + currentPoint.Position.X);
+                movingShape.SetValue(Canvas.TopProperty, offset.Y + currentPoint.Position.Y);
+            }
+        }
+
+        private void shape_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            // release the draggged shape
+            movingShape = null;
+        }
+
+        private LinearGradientBrush GetRandomGradientBrush()
+        {
+            // create a random linear gradient brush
+            byte[] bytes1 = new byte[3];
+            rnd.NextBytes(bytes1);
+            byte[] bytes2 = new byte[3];
+            rnd.NextBytes(bytes2);
+            GradientStopCollection gradientStops = new GradientStopCollection();
+            gradientStops.Add(new GradientStop() { Color = Color.FromArgb(128, bytes1[0], bytes1[1], bytes1[2]), Offset = 0 });
+            gradientStops.Add(new GradientStop() { Color = Color.FromArgb(192, bytes2[0], bytes2[1], bytes2[2]), Offset = 1 });
+            return new LinearGradientBrush(gradientStops, rnd.Next() * 360);
+        }
+
+        private void AttachDragHandlers(Shape shape)
+        {
+            shape.PointerPressed += shape_PointerPressed;
+            shape.PointerMoved += shape_PointerMoved;
+            shape.PointerReleased += shape_PointerReleased;
+        }
+
+        private void animationToggle_Checked(object sender, RoutedEventArgs e)
+        {
+            // start animation on all shape elements
+            foreach (UIElement element in root.Children)
+            {
+                Shape shape = element as Shape;
+                if (shape != null)
+                {
+                    AddAnimation(shape);
+                }
+            }
+        }
+
         private void animationToggle_Unchecked(object sender, RoutedEventArgs e)
         {
+            // pause animation on all shape elements
             foreach (UIElement element in root.Children)
             {
                 Shape shape = element as Shape;
