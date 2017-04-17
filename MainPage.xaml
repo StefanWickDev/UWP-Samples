@@ -1,0 +1,21 @@
+﻿<Page
+    x:Class="ShapeRecognitionUWP.MainPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:ShapeRecognitionUWP"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d">
+
+    <Grid Background="{StaticResource backgroundBrush}" >
+        <Canvas x:Name="root" />
+        <InkCanvas x:Name="inkCanvas"/>
+    </Grid>
+    <Page.BottomAppBar>
+        <CommandBar IsOpen="True" IsSticky="True" LightDismissOverlayMode="Off">
+            <AppBarButton Label="Clear Shapes" Icon="Clear" Click="AppBarButton_Click"/>
+            <AppBarToggleButton x:Name="animationToggle" Label="Animate Shapes" Icon="SlideShow" IsChecked="False" Checked="animationToggle_Checked" Unchecked="animationToggle_Unchecked"/>
+            <AppBarToggleButton Label="Move Shapes" Icon="MoveToFolder" IsChecked="False" Checked="AppBarToggleButton_Checked" Unchecked="AppBarToggleButton_Unchecked"/>
+        </CommandBar>
+    </Page.BottomAppBar>
+</Page>

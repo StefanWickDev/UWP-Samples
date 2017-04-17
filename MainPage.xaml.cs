@@ -45,7 +45,7 @@ namespace ShapeRecognitionUWP
 
             inkAnalyzer = new InkAnalyzer();
             strokeTimer = new DispatcherTimer();
-            strokeTimer.Interval = TimeSpan.FromMilliseconds(500d);
+            strokeTimer.Interval = TimeSpan.FromMilliseconds(5000d);
             strokeTimer.Tick += StrokeTimer_Tick;
         }
 
