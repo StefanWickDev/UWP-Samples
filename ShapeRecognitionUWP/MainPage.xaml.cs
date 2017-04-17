@@ -33,6 +33,7 @@ namespace ShapeRecognitionUWP
         Random rnd = new Random(Environment.TickCount);
         Shape movingShape = null;
         Point offset;
+        DispatcherTimer strokeTimer = null;
 
         public MainPage()
         {
@@ -40,13 +41,46 @@ namespace ShapeRecognitionUWP
 
             inkCanvas.InkPresenter.InputDeviceTypes = CoreInputDeviceTypes.Mouse | CoreInputDeviceTypes.Pen | CoreInputDeviceTypes.Touch;
             inkCanvas.InkPresenter.StrokesCollected += InkPresenter_StrokesCollected;
+            inkCanvas.InkPresenter.StrokeInput.StrokeStarted += StrokeInput_StrokeStarted;
 
             inkAnalyzer = new InkAnalyzer();
+            strokeTimer = new DispatcherTimer();
+            strokeTimer.Interval = TimeSpan.FromMilliseconds(5000d);
+            strokeTimer.Tick += StrokeTimer_Tick;
         }
 
-        private async void InkPresenter_StrokesCollected(Windows.UI.Input.Inking.InkPresenter sender, Windows.UI.Input.Inking.InkStrokesCollectedEventArgs args)
+        private void StrokeInput_StrokeStarted(InkStrokeInput sender, PointerEventArgs args)
         {
+            strokeTimer.Stop();
+        }
+
+        private void StrokeTimer_Tick(object sender, object e)
+        {
+            strokeTimer.Stop();
+            if (!inkAnalyzer.IsAnalyzing)
+            {
+                Analyze();
+            }
+            else
+            {
+                // Ink analyzer is busy. Wait a while and try again.
+                strokeTimer.Start();
+            }
+        }
+
+        private void InkPresenter_StrokesCollected(Windows.UI.Input.Inking.InkPresenter sender, Windows.UI.Input.Inking.InkStrokesCollectedEventArgs args)
+        {
+            strokeTimer.Stop();
             inkAnalyzer.AddDataForStrokes(args.Strokes);
+            foreach (InkStroke stroke in args.Strokes)
+            {
+                inkAnalyzer.SetStrokeDataKind(stroke.Id, InkAnalysisStrokeKind.Drawing);
+            }
+            strokeTimer.Start();
+        }
+
+        private async void Analyze()
+        {
             InkAnalysisResult result = await inkAnalyzer.AnalyzeAsync();
             if (result.Status == InkAnalysisStatus.Updated && inkAnalyzer.AnalysisRoot.Children.Count > 0)
             {
@@ -58,15 +92,29 @@ namespace ShapeRecognitionUWP
                     if (drawing.DrawingKind == InkAnalysisDrawingKind.Circle ||
                         drawing.DrawingKind == InkAnalysisDrawingKind.Ellipse)
                     {
+                        CompositeTransform transform = new CompositeTransform();
                         Ellipse ellipse = new Ellipse();
                         AttachDragHandlers(ellipse);
                         ellipse.Fill = newRandomBrush;
                         ellipse.Stroke = new SolidColorBrush(Colors.Black);
-                        ellipse.Width = drawing.BoundingRect.Width;
-                        ellipse.Height = drawing.BoundingRect.Height;
-                        CompositeTransform transform = new CompositeTransform();
-                        transform.TranslateX = drawing.BoundingRect.X;
-                        transform.TranslateY = drawing.BoundingRect.Y;
+                        ellipse.Width = Distance(drawing.Points[0], drawing.Points[2]);
+                        var center = new Point((drawing.Points[0].X + drawing.Points[2].X) / 2.0,
+                                               (drawing.Points[0].Y + drawing.Points[2].Y) / 2.0);
+
+                        if (drawing.DrawingKind == InkAnalysisDrawingKind.Circle)
+                        {
+                            ellipse.Height = ellipse.Width;
+                        }
+                        else
+                        {
+                            ellipse.Height = Distance(drawing.Points[1], drawing.Points[3]);
+
+                            double rotationAngle = Math.Atan2(drawing.Points[2].Y - drawing.Points[0].Y,
+                                                              drawing.Points[2].X - drawing.Points[0].X);                            
+                            transform.Rotation = rotationAngle * 180.0 / Math.PI;
+                        }
+                        transform.TranslateX = center.X - ellipse.Width/2.0d;
+                        transform.TranslateY = center.Y - ellipse.Height/2.0d;
                         ellipse.RenderTransform = transform;
                         ellipse.RenderTransformOrigin = new Point(0.5, 0.5);
                         root.Children.Add(ellipse);
@@ -121,6 +169,8 @@ namespace ShapeRecognitionUWP
         {
             root.Children.Clear();
             inkCanvas.InkPresenter.StrokeContainer.Clear();
+            inkAnalyzer.ClearDataForAllStrokes();
+            strokeTimer.Stop();
         }
 
         private void shape_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -226,6 +276,13 @@ namespace ShapeRecognitionUWP
                     }
                 }
             }
+        }
+
+        static double Distance(Point p0, Point p1)
+        {
+            double dX = p1.X - p0.X;
+            double dY = p1.Y - p0.Y;
+            return Math.Sqrt(dX * dX + dY * dY);
         }
     }
 }
